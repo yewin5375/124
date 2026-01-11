@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>မြင်သာကြက်ကင် - မှာယူရန်</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #F8FAFC; -webkit-tap-highlight-color: transparent; }
+        .menu-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        #cart-popup { transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="text-slate-900 overflow-x-hidden">
+
+    <nav class="bg-white/80 backdrop-blur-lg p-5 sticky top-0 z-40 border-b flex justify-between items-center px-6 shadow-sm">
+        <div>
+            <h1 class="text-2xl font-black text-orange-500 italic">မြင်သာကြက်ကင်</h1>
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Premium BBQ Taste</p>
+        </div>
+        <button onclick="openOrders()" class="bg-slate-900 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase shadow-lg active:scale-95 transition-all">History</button>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-4 pb-40">
+        <div class="mb-8">
+            <input type="text" id="menu-search" oninput="filterMenu()" placeholder="ရှာဖွေရန်..." class="w-full bg-white p-5 rounded-3xl shadow-sm border-none ring-1 ring-slate-100 focus:ring-2 focus:ring-orange-500 outline-none font-bold transition-all">
+        </div>
+
+        <div id="menu-loading" class="flex flex-col items-center py-20">
+            <div class="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p class="text-xs font-bold text-slate-400 italic">မီနူးများ ဆွဲယူနေပါသည်...</p>
+        </div>
+        <div id="menu-container" class="menu-grid"></div>
+    </main>
+
+    <div id="floating-cart" class="fixed bottom-8 left-4 right-4 max-w-lg mx-auto bg-slate-900 text-white p-4 rounded-[2.5rem] shadow-2xl flex justify-between items-center z-30 transform transition-all duration-500 translate-y-32">
+        <div onclick="toggleCartPopup(true)" class="flex items-center gap-4 flex-1 cursor-pointer">
+            <div class="bg-orange-500 p-3 rounded-2xl relative">
+                <span class="text-xl">🛒</span>
+                <span id="cart-count" class="absolute -top-2 -right-2 bg-white text-orange-600 text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-slate-900">0</span>
+            </div>
+            <div>
+                <p id="float-total" class="font-black text-lg">0 Ks</p>
+                <p class="text-[9px] font-bold text-slate-400 uppercase">View Basket</p>
+            </div>
+        </div>
+        <button onclick="toggleCartPopup(true)" class="bg-white/10 px-6 py-4 rounded-2xl font-black text-[10px] uppercase">Checkout</button>
+    </div>
+
+    <div id="cart-overlay" onclick="toggleCartPopup(false)" class="fixed inset-0 bg-slate-900/60 hidden z-[100] backdrop-blur-md"></div>
+    <div id="cart-popup" class="fixed bottom-0 left-0 right-0 bg-white z-[110] rounded-t-[3rem] shadow-2xl translate-y-full flex flex-col max-h-[94vh]">
+        <div class="w-16 h-1.5 bg-slate-100 rounded-full mx-auto mt-6"></div>
+        <div class="p-8 overflow-y-auto no-scrollbar flex-1">
+            <h2 class="text-3xl font-black text-slate-800 mb-8">Your Basket</h2>
+            <div id="cart-list" class="space-y-4 mb-8"></div>
+
+            <div class="bg-slate-50 p-6 rounded-[2.5rem] space-y-4 border border-slate-100">
+                <input type="text" id="cust-name" placeholder="သင့်နာမည်" class="w-full bg-white p-4 rounded-2xl font-bold text-sm outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-orange-500">
+                <input type="tel" id="cust-phone" placeholder="ဖုန်းနံပါတ်" class="w-full bg-white p-4 rounded-2xl font-bold text-sm outline-none ring-1 ring-slate-100 focus:ring-2 focus:ring-orange-500">
+                <textarea id="note" placeholder="မှတ်ချက် (အစပ်၊ အချို စသည်ဖြင့်...)" class="w-full bg-white p-5 rounded-[2rem] font-bold text-sm h-24 ring-1 ring-slate-100 outline-none focus:ring-2 focus:ring-orange-500"></textarea>
+            </div>
+        </div>
+        <div class="p-8 border-t bg-white">
+            <div class="flex justify-between items-center mb-6 px-4">
+                <span class="text-slate-400 font-bold uppercase text-xs">Total Amount</span>
+                <span id="popup-total-amt" class="text-3xl font-black text-slate-900">0 Ks</span>
+            </div>
+            <button onclick="submitOrder()" id="submit-btn" class="w-full bg-orange-500 text-white py-5 rounded-[2rem] font-black text-xl shadow-xl shadow-orange-200 uppercase">Confirm Order</button>
+        </div>
+    </div>
+
+    <div id="orders-overlay" class="fixed inset-0 bg-[#F8FAFC] z-[200] hidden overflow-y-auto">
+        <nav class="p-6 bg-white border-b sticky top-0 flex items-center justify-between z-10 shadow-sm">
+            <button onclick="closeOrders()" class="w-10 h-10 flex bg-slate-100 rounded-full items-center justify-center font-bold">←</button>
+            <h2 class="text-xl font-black italic">Order History</h2>
+            <div class="w-10"></div>
+        </nav>
+        <div id="orders-list" class="p-4 max-w-2xl mx-auto space-y-4"></div>
+    </div>
+
+    <script>
+        // --- CONFIG ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCW_jACdwWmN2nwlEOxR6tdTBqLXHyvE0w",
+            authDomain: "myin-thar-chicken-bbq.firebaseapp.com",
+            databaseURL: "https://myin-thar-chicken-bbq-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "myin-thar-chicken-bbq",
+            storageBucket: "myin-thar-chicken-bbq.firebasestorage.app",
+            messagingSenderId: "45639130854",
+            appId: "1:45639130854:web:779ecef328580d10e9e527"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let menuData = [], cart = [], allMyOrders = [];
+
+        // --- CORE FUNCTIONS ---
+        function init() {
+            // Real-time menu updates
+            db.ref('menus').on('value', (snapshot) => {
+                const data = snapshot.val();
+                menuData = data ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
+                document.getElementById('menu-loading').classList.add('hidden');
+                renderMenu();
+            });
+
+            // Local storage for user info
+            document.getElementById('cust-name').value = localStorage.getItem('foodie_name') || '';
+            document.getElementById('cust-phone').value = localStorage.getItem('foodie_phone') || '';
+        }
+
+        function renderMenu(data = menuData) {
+            const container = document.getElementById('menu-container');
+            if (data.length === 0) {
+                container.innerHTML = `<p class="col-span-2 text-center py-20 text-slate-400 font-bold">မီနူးများ မရှိသေးပါ။</p>`;
+                return;
+            }
+            container.innerHTML = data.map(item => `
+                <div class="bg-white rounded-[2rem] p-3 border border-slate-100 shadow-sm active:scale-95 transition-all">
+                    <img src="${item.image_url}" class="w-full h-32 object-cover rounded-[1.5rem] mb-3">
+                    <h3 class="font-black text-[13px] truncate px-1">${item.name}</h3>
+                    <p class="text-orange-500 font-black text-sm mt-1 px-1">${item.price.toLocaleString()} Ks</p>
+                    <button onclick="addToCart('${item.id}')" class="w-full mt-3 py-3 rounded-xl font-black text-[10px] uppercase bg-slate-50 hover:bg-orange-500 hover:text-white transition-all">Add to Cart</button>
+                </div>
+            `).join('');
+        }
+
+        function addToCart(id) {
+            const item = menuData.find(m => m.id === id);
+            const inCart = cart.find(c => c.id === id);
+            if (inCart) inCart.qty++; else cart.push({ ...item, qty: 1 });
+            updateUI();
+            document.getElementById('floating-cart').classList.remove('translate-y-32');
+            Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'ခြင်းထဲထည့်ပြီးပါပြီ', showConfirmButton: false, timer: 800 });
+        }
+
+        function updateUI() {
+            const totalQty = cart.reduce((s, i) => s + i.qty, 0);
+            const totalAmt = cart.reduce((s, i) => s + (i.price * i.qty), 0);
+            document.getElementById('cart-count').innerText = totalQty;
+            document.getElementById('float-total').innerText = totalAmt.toLocaleString() + " Ks";
+            document.getElementById('popup-total-amt').innerText = totalAmt.toLocaleString() + " Ks";
+            if(cart.length === 0) document.getElementById('floating-cart').classList.add('translate-y-32');
+        }
+
+        function renderCartItems() {
+            const list = document.getElementById('cart-list');
+            if(cart.length === 0) { list.innerHTML = `<div class="text-center py-10 opacity-20 font-black uppercase">ခြင်းတောင်းထဲတွင် ဘာမှမရှိပါ</div>`; return; }
+            list.innerHTML = cart.map((item, index) => `
+                <div class="bg-white p-4 rounded-3xl flex items-center gap-4 border border-slate-100 shadow-sm">
+                    <img src="${item.image_url}" class="w-16 h-16 object-cover rounded-2xl">
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-black text-sm truncate">${item.name}</h4>
+                        <p class="text-orange-500 font-black text-xs">${(item.price * item.qty).toLocaleString()} Ks</p>
+                        <div class="flex items-center gap-3 mt-3 bg-slate-50 p-1.5 rounded-xl w-fit">
+                            <button onclick="changeQty(${index}, -1)" class="w-8 h-8 bg-white rounded-lg shadow-sm font-black">-</button>
+                            <span class="w-8 text-center font-black text-xs">${item.qty}</span>
+                            <button onclick="changeQty(${index}, 1)" class="w-8 h-8 bg-white rounded-lg shadow-sm font-black text-orange-500">+</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.changeQty = (idx, amt) => { 
+            cart[idx].qty += amt; 
+            if(cart[idx].qty <= 0) cart.splice(idx, 1); 
+            updateUI(); 
+            renderCartItems(); 
+        };
+
+        async function submitOrder() {
+            const n = document.getElementById('cust-name').value;
+            const p = document.getElementById('cust-phone').value;
+            if(!n || !p || cart.length === 0) return Swal.fire('Error', 'အချက်အလက်ပြည့်စုံစွာဖြည့်ပါ', 'warning');
+            
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true; btn.innerText = "တင်ပို့နေပါသည်...";
+            
+            localStorage.setItem('foodie_name', n);
+            localStorage.setItem('foodie_phone', p);
+
+            try {
+                const orderData = {
+                    customer_name: n,
+                    customer_phone: p,
+                    note: document.getElementById('note').value,
+                    total_amount: cart.reduce((s, i) => s + (i.price * i.qty), 0),
+                    status: 'not_confirm',
+                    created_at: Date.now(),
+                    items: cart
+                };
+
+                const newOrderRef = db.ref('orders').push();
+                await newOrderRef.set({ ...orderData, id: newOrderRef.key });
+
+                cart = []; updateUI(); toggleCartPopup(false); 
+                Swal.fire('အောင်မြင်ပါသည်', 'အော်ဒါတင်ပြီးပါပြီ။', 'success').then(() => openOrders());
+            } catch (err) { alert(err.message); }
+            btn.disabled = false; btn.innerText = "Confirm Order";
+        }
+
+        function openOrders() {
+            const phone = localStorage.getItem('foodie_phone');
+            if(!phone) return Swal.fire('Error', 'မှာယူမှုမှတ်တမ်းမရှိသေးပါ', 'info');
+            document.getElementById('orders-overlay').classList.remove('hidden');
+            
+            db.ref('orders').orderByChild('customer_phone').equalTo(phone).on('value', (snapshot) => {
+                const data = snapshot.val();
+                allMyOrders = data ? Object.values(data).reverse() : [];
+                document.getElementById('orders-list').innerHTML = allMyOrders.map(o => `
+                    <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-3">
+                        <div class="flex justify-between border-b pb-2">
+                            <span class="font-black text-orange-500 uppercase text-xs">${o.status}</span>
+                            <span class="text-[10px] font-bold text-slate-300">${new Date(o.created_at).toLocaleString()}</span>
+                        </div>
+                        <div class="text-xs font-bold text-slate-600">
+                            ${o.items.map(i => `<p>${i.name} x ${i.qty}</p>`).join('')}
+                            <p class="mt-2 text-slate-900 font-black">Total: ${o.total_amount.toLocaleString()} Ks</p>
+                        </div>
+                    </div>
+                `).join('');
+            });
+        }
+
+        function filterMenu() {
+            const q = document.getElementById('menu-search').value.toLowerCase();
+            renderMenu(menuData.filter(i => i.name.toLowerCase().includes(q)));
+        }
+
+        function toggleCartPopup(s) { 
+            const p = document.getElementById('cart-popup');
+            document.getElementById('cart-overlay').classList.toggle('hidden', !s);
+            if(s) { p.classList.remove('translate-y-full'); renderCartItems(); } else { p.classList.add('translate-y-full'); }
+        }
+
+        function closeOrders() { document.getElementById('orders-overlay').classList.add('hidden'); }
+        
+        init();
+    </script>
+</body>
+</html>
+
